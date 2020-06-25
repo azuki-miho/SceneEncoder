@@ -50,5 +50,7 @@ Modify the model_path to your .ckpt file path and the ply_path to the original [
 
 ### ShapeNet DataSet Segmentation
 
+Incoming :=)
+
 ## License
 This repository is released under MIT License (see LICENSE file for details).
