@@ -22,7 +22,7 @@ The code has been tested with Python 3.6, TensorFlow 1.13.1, CUDA 10.0 and cuDNN
 
 ## Usage
 ### ScanetNet DataSet Segmentation
-We provide the preprocessed down [here](). If you want to prepare the dataset on your own, please download the ScanNetv2 dataset from [here](http://www.scan-net.org/), and see `scannet/README` for details of preprocessing.
+Please download the ScanNetv2 dataset from [here](http://www.scan-net.org/), and see `scannet/README` for details of preprocessing.
 
 To train a model to segment Scannet Scenes:
 
