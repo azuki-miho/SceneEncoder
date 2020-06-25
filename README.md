@@ -27,13 +27,13 @@ Please download the ScanNetv2 dataset from [here](http://www.scan-net.org/), and
 To train a model to segment Scannet Scenes:
 
 ```
-CUDA_VISIBLE_DEVICES=0 python train_scannet_IoU.py --model pointconv_weight_density_n16 --log_dir pointconv_scannet_ --batch_size 8
+CUDA_VISIBLE_DEVICES=0 python train_scannet_IoU.py --model scene_encoder_rsl --log_dir scannet_ --batch_size 8
 ```
 
 After training, to generate test results to *dump_%s* directory:
 
 ```
-CUDA_VISIBLE_DEVICES=0 python evaluate_scannet.py --model pointconv_weight_density_n16 --batch_size 8 --model_path pointconv_scannet_%s --ply_path DataSet/ScanNetv2/scans
+CUDA_VISIBLE_DEVICES=0 python evaluate_scannet.py --model scene_encoder_rsl --batch_size 8 --model_path scannet_%s --ply_path DataSet/ScanNetv2/scans
 ```
 
 Then, to upload the results to the ScanNetv2 benchmark server:
@@ -43,7 +43,7 @@ zip out.zip dump_%s/scene*
 
 (Optional) To visualize the results on validation dataset:
 ```
-CUDA_VISIBLE_DEVICES=0 python visualize_scene.py --model pointconv_weight_density_n16 --batch_size 8 --model_path pointconv_scannet_%s --ply_path DataSet/ScanNetv2/scans
+CUDA_VISIBLE_DEVICES=0 python visualize_scene.py --model scene_encoder_rsl --batch_size 8 --model_path scannet_%s --ply_path DataSet/ScanNetv2/scans
 ```
 
 Modify the model_path to your .ckpt file path and the ply_path to the original [ScanNetv2](http://www.scan-net.org/) ply file.
