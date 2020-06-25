@@ -33,7 +33,7 @@ CUDA_VISIBLE_DEVICES=0 python train_scannet_IoU.py --model scene_encoder_rsl --l
 After training, to generate test results to *dump_%s* directory:
 
 ```
-CUDA_VISIBLE_DEVICES=0 python evaluate_scannet.py --model scene_encoder_rsl --batch_size 8 --model_path scannet_%s --ply_path DataSet/ScanNetv2/scans
+CUDA_VISIBLE_DEVICES=0 python evaluate_scannet.py --model scene_encoder_rsl --batch_size 8 --model_path scannet_%s
 ```
 
 Then, to upload the results to the ScanNetv2 benchmark server:
