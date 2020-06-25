@@ -4,7 +4,7 @@
 # SceneEncoder: Scene-Aware Semantic Segmentation of Point Clouds with A Learnable Scene Descriptor 
 by Jiachen Xu*, Jingyu Gong*, Jie Zhou, Xin Tan, Yuan Xie and Lizhuang Ma.
 
-<p align="center"> <img src="imgs/framework.pdf" width="100%"> </p>
+<p align="center"> <img src="imgs/framework.png" width="80%"> </p>
 
 ## Introduction
 This project is based on our IJCAI2020 paper. You can find the [arXiv](https://arxiv.org/abs/2001.09087) version here.
