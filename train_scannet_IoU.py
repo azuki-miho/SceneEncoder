@@ -1,7 +1,7 @@
 """
-Modified from PointNet++: https://github.com/charlesq34/pointnet2
-Author: Wenxuan Wu
-Date: July 2018
+Modified from PointConv: https://github.com/DylanWusee/pointconv
+Author: Jiachen Xu and Jingyu Gong
+Date: June 2020
 """
 import argparse
 import math
@@ -28,8 +28,8 @@ parser.add_argument('--gpu', type=int, default=0, help='GPU to use [default: GPU
 parser.add_argument('--model', default='model', help='Model name [default: model]')
 parser.add_argument('--log_dir', default='log', help='Log dir [default: log]')
 parser.add_argument('--num_point', type=int, default=8192, help='Point Number [default: 8192]')
-parser.add_argument('--max_epoch', type=int, default=501, help='Epoch to run [default: 501]')
-parser.add_argument('--batch_size', type=int, default=8, help='Batch Size during training [default: 32]')
+parser.add_argument('--max_epoch', type=int, default=1001, help='Epoch to run [default: 1001]')
+parser.add_argument('--batch_size', type=int, default=8, help='Batch Size during training [default: 8]')
 parser.add_argument('--learning_rate', type=float, default=0.001, help='Initial learning rate [default: 0.001]')
 parser.add_argument('--momentum', type=float, default=0.9, help='Initial learning rate [default: 0.9]')
 parser.add_argument('--optimizer', default='adam', help='adam or momentum [default: adam]')
@@ -60,7 +60,7 @@ if not os.path.exists(LOG_DIR): os.mkdir(LOG_DIR)
 os.system('cp %s %s' % (MODEL_FILE, LOG_DIR)) # bkp of model def
 os.system('cp %s %s' % (Point_Util, LOG_DIR))
 os.system('cp %s %s' % ('PointConv.py', LOG_DIR))
-os.system('cp train_scannet_IoU_GPU0.py %s' % (LOG_DIR)) # bkp of train procedure
+os.system('cp train_scannet_IoU.py %s' % (LOG_DIR)) # bkp of train procedure
 LOG_FOUT = open(os.path.join(LOG_DIR, 'log_train.txt'), 'w')
 LOG_FOUT.write(str(FLAGS)+'\n')
 
@@ -110,8 +110,7 @@ def get_bn_decay(batch):
 def train():
     with tf.Graph().as_default():
         with tf.device('/gpu:'+str(GPU_INDEX)):
-            #pointclouds_pl, labels_pl, smpws_pl = MODEL.placeholder_inputs(BATCH_SIZE, NUM_POINT)
-            pointclouds_pl, labels_pl, labels_onehot_pl, smpws_pl, external_scene_encode_pl = MODEL.placeholder_scene_inputs(BATCH_SIZE, NUM_POINT,NUM_CLASSES)
+            pointclouds_pl, labels_pl, labels_onehot_pl, smpws_pl, external_scene_encode_pl, cos_loss_weight = MODEL.placeholder_scene_inputs(BATCH_SIZE, NUM_POINT,NUM_CLASSES)
             is_training_pl = tf.placeholder(tf.bool, shape=())
             print(is_training_pl)
 
@@ -123,10 +122,8 @@ def train():
 
             print("--- Get model and loss")
             # Get model and loss
-            #pred, end_points = MODEL.get_model(pointclouds_pl, is_training_pl, NUM_CLASSES, BANDWIDTH, bn_decay=bn_decay)
             pred_origin, end_points, external_scene_feature = MODEL.get_scene_model(pointclouds_pl, is_training_pl, NUM_CLASSES, BANDWIDTH, bn_decay=bn_decay)
-            #loss = MODEL.get_loss(pred, labels_pl, smpws_pl)
-            loss, pred = MODEL.get_scene_loss(pred_origin, labels_onehot_pl, smpws_pl,external_scene_feature,external_scene_encode_pl)
+            loss, pred = MODEL.get_scene_loss(cos_loss_weight, pred_origin, labels_pl, labels_onehot_pl, smpws_pl,external_scene_feature,external_scene_encode_pl, end_points['feats'], pointclouds_pl[:, :, :3])
             tf.summary.scalar('loss', loss)
 
             correct = tf.equal(tf.argmax(pred, 2), tf.to_int64(labels_pl))
@@ -162,7 +159,6 @@ def train():
         # Init variables
         init = tf.global_variables_initializer()
         sess.run(init)
-        #sess.run(init, {is_training_pl: True})
 
         ops = {'pointclouds_pl': pointclouds_pl,
                'labels_pl': labels_pl,
@@ -175,30 +171,24 @@ def train():
                'train_op': train_op,
                'merged': merged,
                'step': batch,
-               'end_points': end_points}
+               'end_points': end_points, 
+               'cos_loss_weight': cos_loss_weight}
 
-        #best_acc = -1
         best_mIoU = -1
         for epoch in range(MAX_EPOCH):
             log_string('**** EPOCH %03d ****' % (epoch))
             sys.stdout.flush()
 
             start_time = time.time()
-            #train_one_epoch(sess, ops, train_writer)
-            train_scene_one_epoch(sess, ops, train_writer,NUM_CLASSES)
+            train_scene_one_epoch(sess, ops, train_writer, NUM_CLASSES, epoch)
             end_time = time.time()
             log_string('one epoch time: %.4f'%(end_time - start_time))
-            #eval_one_epoch(sess, ops, test_writer)
             mIoU,total_cross_matrix = eval_scene_one_epoch(sess, ops, test_writer,NUM_CLASSES)
-            #if epoch%5==0:
-            #    acc = eval_whole_scene_one_epoch(sess, ops, whole_test_writer)
-            #if acc > best_acc:
             if mIoU > best_mIoU:
-                #best_acc = acc
                 best_mIoU = mIoU
                 save_path = saver.save(sess, os.path.join(LOG_DIR, "best_model_epoch_%03d.ckpt"%(epoch)))
-                cross_matrix_path = os.path.join(LOG_DIR,"cross_matrix.npy")
-                np.save(cross_matrix_path,total_cross_matrix)
+                cross_matrix_path = os.path.join(LOG_DIR, "cross_matrix.npy")
+                np.save(cross_matrix_path, total_cross_matrix)
                 log_string("Model saved in file: %s" % save_path)
 
             # Save the variables to disk.
@@ -236,7 +226,9 @@ def get_batch(dataset, idxs, start_idx, end_idx):
         batch_smpw[i,:] = smpw
     return batch_data, batch_label, batch_smpw
 
-def train_one_epoch(sess, ops, train_writer):
+weight = [0.1, 0.3, 0.5, 0.7, 0.9, 1, 1, 1, 1.1, 1.1, 1.1]
+
+def train_scene_one_epoch(sess, ops, train_writer, num_classes, epoch):
     """ ops: dict mapping from string to tf ops """
     is_training = True
 
@@ -251,56 +243,9 @@ def train_one_epoch(sess, ops, train_writer):
     total_seen = 0
     loss_sum = 0
     total_iou_deno = 0
-    for batch_idx in range(num_batches):
-        start_idx = batch_idx * BATCH_SIZE
-        end_idx = (batch_idx+1) * BATCH_SIZE
-        #batch_data, batch_label, batch_smpw = get_batch_wdp(TRAIN_DATASET, train_idxs, start_idx, end_idx)
-        batch_data, batch_label, batch_smpw = get_batch(TRAIN_DATASET, train_idxs, start_idx, end_idx)
-        # Augment batched point clouds by rotation
-        aug_data = provider.rotate_point_cloud_z(batch_data)
-        #aug_data = provider.rotate_point_cloud(batch_data)
 
-        feed_dict = {ops['pointclouds_pl']: aug_data,
-                    ops['labels_pl']: batch_label,
-                    ops['smpws_pl']:batch_smpw,
-                    ops['is_training_pl']: is_training,}
-        summary, step, _, loss_val, pred_val = sess.run([ops['merged'], ops['step'],
-            ops['train_op'], ops['loss'], ops['pred']], feed_dict=feed_dict)
-        train_writer.add_summary(summary, step)
-        pred_val = np.argmax(pred_val, 2)
-        correct = np.sum(pred_val == batch_label)
-        total_correct += correct
-        total_seen += (BATCH_SIZE*NUM_POINT)
-        iou_deno = 0
-        for l in range(NUM_CLASSES):
-            iou_deno += np.sum((pred_val==l) | (batch_label==l))
-        total_iou_deno += iou_deno
-        loss_sum += loss_val
-        if (batch_idx+1)%10 == 0:
-            log_string(' -- %03d / %03d --' % (batch_idx+1, num_batches))
-            log_string('mean loss: %f' % (loss_sum / 10))
-            log_string('accuracy: %f' % (total_correct / float(total_seen)))
-            log_string('total IoU: %f' % (total_correct / float(total_iou_deno)))
-            total_correct = 0
-            total_seen = 0
-            loss_sum = 0
-            total_iou_deno = 0
+    cos_weight = weight[epoch // 100]
 
-def train_scene_one_epoch(sess, ops, train_writer,num_classes):
-    """ ops: dict mapping from string to tf ops """
-    is_training = True
-
-    # Shuffle train samples
-    train_idxs = np.arange(0, len(TRAIN_DATASET))
-    np.random.shuffle(train_idxs)
-    num_batches = int(len(TRAIN_DATASET)/BATCH_SIZE)
-
-    log_string(str(datetime.now()))
-
-    total_correct = 0
-    total_seen = 0
-    loss_sum = 0
-    total_iou_deno = 0
     for batch_idx in range(num_batches):
         start_idx = batch_idx * BATCH_SIZE
         end_idx = (batch_idx+1) * BATCH_SIZE
@@ -317,7 +262,9 @@ def train_scene_one_epoch(sess, ops, train_writer,num_classes):
                     ops['labels_onehot_pl']: batch_label_onehot,
                     ops['smpws_pl']:batch_smpw,
                     ops['external_scene_encode_pl']:external_batch_scene_encode,
-                    ops['is_training_pl']: is_training,}
+                    ops['is_training_pl']: is_training,
+                    ops['cos_loss_weight']: cos_weight}
+
         summary, step, _, loss_val, pred_val = sess.run([ops['merged'], ops['step'],
             ops['train_op'], ops['loss'], ops['pred']], feed_dict=feed_dict)
         train_writer.add_summary(summary, step)
@@ -339,65 +286,6 @@ def train_scene_one_epoch(sess, ops, train_writer,num_classes):
             total_seen = 0
             loss_sum = 0
             total_iou_deno = 0
-
-# evaluate on randomly chopped scenes
-def eval_one_epoch(sess, ops, test_writer):
-    """ ops: dict mapping from string to tf ops """
-    global EPOCH_CNT
-    is_training = False
-    test_idxs = np.arange(0, len(TEST_DATASET))
-    num_batches = int(len(TEST_DATASET)/BATCH_SIZE)
-
-    total_correct = 0
-    total_seen = 0
-    loss_sum = 0
-    total_seen_class = [0 for _ in range(NUM_CLASSES)]
-    total_correct_class = [0 for _ in range(NUM_CLASSES)]
-    total_iou_deno_class = [0 for _ in range(NUM_CLASSES)]
-
-    log_string(str(datetime.now()))
-    log_string('---- EPOCH %03d EVALUATION ----'%(EPOCH_CNT))
-
-    labelweights = np.zeros(21)
-    for batch_idx in range(num_batches):
-        start_idx = batch_idx * BATCH_SIZE
-        end_idx = (batch_idx+1) * BATCH_SIZE
-        batch_data, batch_label, batch_smpw = get_batch(TEST_DATASET, test_idxs, start_idx, end_idx)
-
-        aug_data = provider.rotate_point_cloud_z(batch_data)
-        #aug_data = provider.rotate_point_cloud(batch_data)
-        bandwidth = BANDWIDTH
-
-        feed_dict = {ops['pointclouds_pl']: aug_data,
-                    ops['labels_pl']: batch_label,
-                    ops['smpws_pl']: batch_smpw,
-                    ops['is_training_pl']: is_training}
-        summary, step, loss_val, pred_val = sess.run([ops['merged'], ops['step'],
-            ops['loss'], ops['pred']], feed_dict=feed_dict)
-        test_writer.add_summary(summary, step)
-        pred_val = np.argmax(pred_val, 2) # BxN
-        correct = np.sum((pred_val == batch_label) & (batch_label>0) & (batch_smpw>0)) # evaluate only on 20 categories but not unknown
-        total_correct += correct
-        total_seen += np.sum((batch_label>0) & (batch_smpw>0))
-        loss_sum += loss_val
-        tmp,_ = np.histogram(batch_label,range(22))
-        labelweights += tmp
-        for l in range(NUM_CLASSES):
-            total_seen_class[l] += np.sum((batch_label==l) & (batch_smpw>0))
-            total_correct_class[l] += np.sum((pred_val==l) & (batch_label==l) & (batch_smpw>0))
-            total_iou_deno_class[l] += np.sum(((pred_val==l) | (batch_label==l)) & (batch_smpw>0))
-
-    mIoU = np.mean(np.array(total_correct_class[1:])/(np.array(total_iou_deno_class[1:],dtype=np.float)+1e-6))
-    log_string('eval mean loss: %f' % (loss_sum / float(num_batches)))
-    log_string('eval point avg class IoU: %f' % (mIoU))
-    log_string('eval point accuracy: %f'% (total_correct / float(total_seen)))
-    log_string('eval point avg class acc: %f' % (np.mean(np.array(total_correct_class[1:])/(np.array(total_seen_class[1:],dtype=np.float)+1e-6))))
-    iou_per_class_str = '------- IoU --------\n'
-    for l in range(1,NUM_CLASSES):
-        iou_per_class_str += 'class %d, acc: %f \n' % (l,total_correct_class[l]/float(total_iou_deno_class[l]))
-    log_string(iou_per_class_str)
-    EPOCH_CNT += 1
-    return mIoU
 
 # evaluate on randomly chopped scenes
 def eval_scene_one_epoch(sess, ops, test_writer,num_classes):
@@ -435,7 +323,9 @@ def eval_scene_one_epoch(sess, ops, test_writer,num_classes):
                     ops['labels_onehot_pl']: batch_label_onehot,
                     ops['smpws_pl']: batch_smpw,
                     ops['external_scene_encode_pl']:external_batch_scene_encode,
-                    ops['is_training_pl']: is_training}
+                    ops['is_training_pl']: is_training, 
+                    ops['cos_loss_weight']: 1.0}
+
         summary, step, loss_val, pred_val = sess.run([ops['merged'], ops['step'],
             ops['loss'], ops['pred']], feed_dict=feed_dict)
         test_writer.add_summary(summary, step)

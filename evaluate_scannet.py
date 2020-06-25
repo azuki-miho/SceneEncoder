@@ -1,7 +1,8 @@
 """
+Modified from PointConv: https://github.com/DylanWusee/pointconv
 Evaluation on ScanNet: Generalize neccenary .ply and .txt file
-Author: Wenxuan Wu
-Date: July 2018
+Author: Jingyu Gong and Jiachen Xu
+Date: June 2020
 """
 
 import argparse
@@ -31,7 +32,7 @@ from visualize_labels_on_mesh import visualize
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--gpu', type=int, default=0, help='GPU to use [default: GPU 0]')
-parser.add_argument('--model', default='model', help='Model name [default: model]')
+parser.add_argument('--model', default='pointconv_weight_density_n16_xu', help='Model name [default: model]')
 parser.add_argument('--batch_size', type=int, default=8, help='Batch Size during training [default: 8]')
 parser.add_argument('--num_point', type=int, default=8192, help='Point Number [256/512/1024/2048] [default: 8192]')
 parser.add_argument('--model_path', default='log/model.ckpt', help='model checkpoint file path [default: log/model.ckpt]')
@@ -60,7 +61,7 @@ HOSTNAME = socket.gethostname()
 
 DATA_PATH = os.path.join(BASE_DIR, 'scannet')
 print("start loading whole scene data ...")
-TEST_DATASET_WHOLE_SCENE = scannet_dataset_sw_rgb.ScannetDatasetWholeScene_evaluation(root=DATA_PATH, split='val', with_rgb = WITH_RGB)
+TEST_DATASET_WHOLE_SCENE = scannet_dataset_sw_rgb.ScannetDatasetWholeScene_evaluation(root=DATA_PATH, split='test', with_rgb = WITH_RGB)
 
 def log_string(out_str):
     LOG_FOUT.write(out_str+'\n')
@@ -74,11 +75,15 @@ def evaluate(num_votes):
         else:
             pointclouds_pl = tf.placeholder(tf.float32, shape=(BATCH_SIZE, NUM_POINT, 3))
         labels_pl = tf.placeholder(tf.int32, shape=(BATCH_SIZE, NUM_POINT))
+        labels_onehot_pl = tf.placeholder(tf.float32, shape=(BATCH_SIZE, NUM_POINT, NUM_CLASSES))
         smpws_pl = tf.placeholder(tf.float32, shape=(BATCH_SIZE, NUM_POINT))
+        external_scene_encode_pl = tf.placeholder(tf.int32, shape=(BATCH_SIZE, NUM_CLASSES))
         is_training_pl = tf.placeholder(tf.bool, shape=())
 
-        pred, end_points = MODEL.get_model(pointclouds_pl, is_training_pl, NUM_CLASSES, BANDWIDTH)
-        MODEL.get_loss(pred, labels_pl, smpws_pl)
+        #pred, end_points = MODEL.get_model(pointclouds_pl, is_training_pl, NUM_CLASSES, BANDWIDTH)
+        pred_origin, end_points, external_scene_feature = MODEL.get_scene_model(pointclouds_pl, is_training_pl, NUM_CLASSES, BANDWIDTH)
+        #MODEL.get_loss(pred, labels_pl, smpws_pl)
+        loss, pred = MODEL.get_scene_loss(pred_origin, labels_pl, labels_onehot_pl, smpws_pl, external_scene_feature, external_scene_encode_pl, end_points['feats'], pointclouds_pl)
         losses = tf.get_collection('losses')
         total_loss = tf.add_n(losses, name='total_loss')
         saver = tf.train.Saver()
@@ -113,21 +118,23 @@ test_class = np.array([0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 14, 16, 24, 28,
 
 def eval_one_epoch(sess, ops, num_votes=1, topk=1):
     is_training = False
-    file_list = "./scannet/scannetv2_val.txt"
+    file_list = "./scannet/scannetv2_test.txt"
     with open(file_list) as fl:
         scene_id = fl.read().splitlines()
-    
+
     num_batches = len(TEST_DATASET_WHOLE_SCENE)
+    print(num_batches)
+
 
     total_seen_class = [0 for _ in range(NUM_CLASSES)]
     total_correct_class = [0 for _ in range(NUM_CLASSES)]
     total_iou_deno_class = [0 for _ in range(NUM_CLASSES)]
 
     log_string(str(datetime.now()))
-    log_string('---- EVALUATION WHOLE SCENE----')
-    
+    log_string('---- GENERATING TEST RESULTS ----')
+
     for batch_idx in range(num_batches):
-        print("visualize %d %s ..."%(batch_idx, scene_id[batch_idx]))
+        print("test %d %s ..."%(batch_idx, scene_id[batch_idx]))
         whole_scene_points_index = TEST_DATASET_WHOLE_SCENE.scene_points_id[batch_idx]
         whole_scene_points_num = TEST_DATASET_WHOLE_SCENE.scene_points_num[batch_idx]
         whole_scene_label = TEST_DATASET_WHOLE_SCENE.semantic_labels_list[batch_idx]
@@ -161,6 +168,8 @@ def eval_one_epoch(sess, ops, num_votes=1, topk=1):
                 vote_label_pool = add_vote(vote_label_pool, batch_point_index[0:real_batch_size,...], batch_pred_label[0:real_batch_size,...])
 
         pred_label = np.argmax(vote_label_pool, 1)
+        print(pred_label)
+
         for l in range(NUM_CLASSES):
             total_seen_class[l] += np.sum((whole_scene_label==l))
             total_correct_class[l] += np.sum((pred_label==l) & (whole_scene_label==l))
@@ -178,18 +187,6 @@ def eval_one_epoch(sess, ops, num_votes=1, topk=1):
             for i in whole_scene_data:
                 pl_save.write(str(int(i))+'\n')
             pl_save.close()
-        
-        pred_file = filename
-        mesh_file = os.path.join(PLY_PATH, scene_id[batch_idx], scene_id[batch_idx]+ '_vh_clean_2.ply')
-        output_file = os.path.join(DUMP_DIR, scene_id[batch_idx] + '.ply')
-        visualize(pred_file, mesh_file, output_file)
-        
-    IoU = np.array(total_correct_class[1:])/(np.array(total_iou_deno_class[1:],dtype=np.float)+1e-6)
-    log_string('eval point avg class IoU: %f' % (np.mean(IoU)))
-    IoU_Class = 'Each Class IoU:::\n'
-    for i in range(IoU.shape[0]):
-        IoU_Class += 'Class %d : %.4f\n'%(i+1, IoU[i])
-    log_string(IoU_Class)
 
     print("Done!")
 
