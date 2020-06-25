@@ -21,12 +21,8 @@ The code is based on [PointNet](https://github.com/charlesq34/pointnet), [PointN
 The code has been tested with Python 3.6, TensorFlow 1.13.1, CUDA 10.0 and cuDNN 7.3 on Ubuntu 18.04.
 
 ## Usage
-### ModelNet40 Classification
-Please check [pointconv_pytorch](https://github.com/DylanWusee/pointconv_pytorch) for details on Classification task on ModelNet40 using pytorch.
-
 ### ScanetNet DataSet Segmentation
-
-Download the ScanNetv2 dataset from [here](http://www.scan-net.org/), and see `scannet/README` for details of preprocessing.
+We provide the preprocessed down [here](). If you want to prepare the dataset on your own, please download the ScanNetv2 dataset from [here](http://www.scan-net.org/), and see `scannet/README` for details of preprocessing.
 
 To train a model to segment Scannet Scenes:
 
@@ -41,6 +37,8 @@ CUDA_VISIBLE_DEVICES=0 python evaluate_scannet.py --model pointconv_weight_densi
 ```
 
 Modify the model_path to your .ckpt file path and the ply_path to the ScanNetv2 ply file.
+
+### ScanetNet DataSet Segmentation
 
 ## License
 This repository is released under MIT License (see LICENSE file for details).
