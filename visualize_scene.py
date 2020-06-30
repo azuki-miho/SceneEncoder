@@ -32,7 +32,7 @@ from my_visualize_labels_on_mesh import visualize
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--gpu', type=int, default=0, help='GPU to use [default: GPU 0]')
-parser.add_argument('--model', default='pointconv_weight_density_n16_xu', help='Model name [default: model]')
+parser.add_argument('--model', default='scene_encoder_rsl', help='Model name [default: model]')
 parser.add_argument('--batch_size', type=int, default=6, help='Batch Size during training [default: 8]')
 parser.add_argument('--num_point', type=int, default=8192, help='Point Number [256/512/1024/2048] [default: 8192]')
 parser.add_argument('--model_path', default='log/model.ckpt', help='model checkpoint file path [default: log/model.ckpt]')
