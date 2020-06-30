@@ -26,7 +26,7 @@ import part_dataset_all_normal
 parser = argparse.ArgumentParser()
 parser.add_argument('--gpu', type=int, default=0, help='GPU to use [default: GPU 0]')
 parser.add_argument('--model', default='scene_encoder_rsl_shapenet', help='Model name [default: model]')
-parser.add_argument('--log_dir', default='log_pointconv_GPU0_', help='Log dir [default: log]')
+parser.add_argument('--log_dir', default='log_shapenet_', help='Log dir [default: log]')
 parser.add_argument('--num_point', type=int, default=2048, help='Point Number [default: 2048]')
 parser.add_argument('--max_epoch', type=int, default=201, help='Epoch to run [default: 201]')
 parser.add_argument('--batch_size', type=int, default=16, help='Batch Size during training [default: 32]')
