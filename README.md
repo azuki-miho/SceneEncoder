@@ -20,6 +20,11 @@ The code is based on [PointNet](https://github.com/charlesq34/pointnet), [PointN
 
 The code has been tested with Python 3.6, TensorFlow 1.13.1, CUDA 10.0 and cuDNN 7.3 on Ubuntu 18.04.
 
+To install some required of package, run:
+```
+pip install -r requirements.txt
+```
+
 ## Usage
 ### ScanNet DataSet Segmentation
 Please download the ScanNetv2 dataset from [here](http://www.scan-net.org/), and see `scannet/README` for details of preprocessing.
