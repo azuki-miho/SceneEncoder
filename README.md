@@ -58,7 +58,11 @@ To train a model to finish the part segmentation and evaluate it:
 ```
 CUDA_VISIBLE_DEVICES=0 python train_shapenet_IoU.py
 ```
-Result Visualization Code Incoming :=)
+(Optional) To visualize the results on ShapeNet Part dataset:
+```
+CUDA_VISIBLE_DEVICES=0 python visualize_part.py --model_path log_shapenet_%s
+```
+Under testing :=)
 
 ## License
 This repository is released under MIT License (see LICENSE file for details).
