@@ -40,7 +40,7 @@ if your default python is python2.
 
 The code has been tested with Python 3.6, TensorFlow 1.13.1, CUDA 10.0 and cuDNN 7.3 on Ubuntu 18.04.
 
-To install some required of package, run:
+To install some of required package, run:
 ```
 pip install -r requirements.txt
 ```
