@@ -50,7 +50,15 @@ Modify the model_path to your .ckpt file path and the ply_path to the original [
 
 ### ShapeNet DataSet Segmentation
 
-Incoming :=)
+Please download the ShapeNet Part dataset following the instruction of [SpiderCNN](https://github.com/xyf513/SpiderCNN) and put it under the data directory. Unzip it under the corresponding directory:
+```
+unzip shapenetcore_partanno_segmentation_benchmark_v0_normal.zip
+```
+To train a model to finish the part segmentation and evaluate it:
+```
+CUDA_VISIBLE_DEVICES=0 python train_shapenet_IoU.py
+```
+Result Visualization Code Incoming :=)
 
 ## License
 This repository is released under MIT License (see LICENSE file for details).
