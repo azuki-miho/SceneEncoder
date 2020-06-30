@@ -27,6 +27,7 @@ to
 CUDA_PATH=/usr/local/cuda-9.0
 ```
 if you use CUDA 9.0.
+
 Additionally, you need to specifically change the command
 ```
 TF_INC=$(python -c 'import tensorflow as tf; print(tf.sysconfig.get_include())')
