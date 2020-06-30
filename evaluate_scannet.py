@@ -59,6 +59,7 @@ BANDWIDTH = 0.05
 NUM_CLASSES = 21
 HOSTNAME = socket.gethostname()
 
+print(WITH_RGB)
 DATA_PATH = os.path.join(BASE_DIR, 'scannet')
 print("start loading whole scene data ...")
 TEST_DATASET_WHOLE_SCENE = scannet_dataset_sw_rgb.ScannetDatasetWholeScene_evaluation(root=DATA_PATH, split='test', with_rgb = WITH_RGB)
@@ -74,16 +75,21 @@ def evaluate(num_votes):
             pointclouds_pl = tf.placeholder(tf.float32, shape=(BATCH_SIZE, NUM_POINT, 6))
         else:
             pointclouds_pl = tf.placeholder(tf.float32, shape=(BATCH_SIZE, NUM_POINT, 3))
+
+        print(pointclouds_pl)
+
         labels_pl = tf.placeholder(tf.int32, shape=(BATCH_SIZE, NUM_POINT))
         labels_onehot_pl = tf.placeholder(tf.float32, shape=(BATCH_SIZE, NUM_POINT, NUM_CLASSES))
         smpws_pl = tf.placeholder(tf.float32, shape=(BATCH_SIZE, NUM_POINT))
         external_scene_encode_pl = tf.placeholder(tf.int32, shape=(BATCH_SIZE, NUM_CLASSES))
         is_training_pl = tf.placeholder(tf.bool, shape=())
 
+        cos_loss_weight = tf.placeholder(tf.float32, shape=())
+
         #pred, end_points = MODEL.get_model(pointclouds_pl, is_training_pl, NUM_CLASSES, BANDWIDTH)
         pred_origin, end_points, external_scene_feature = MODEL.get_scene_model(pointclouds_pl, is_training_pl, NUM_CLASSES, BANDWIDTH)
         #MODEL.get_loss(pred, labels_pl, smpws_pl)
-        loss, pred = MODEL.get_scene_loss(pred_origin, labels_pl, labels_onehot_pl, smpws_pl, external_scene_feature, external_scene_encode_pl, end_points['feats'], pointclouds_pl)
+        loss, pred = MODEL.get_scene_loss(cos_loss_weight, pred_origin, labels_pl, labels_onehot_pl, smpws_pl, external_scene_feature, external_scene_encode_pl, end_points['feats'], pointclouds_pl)
         losses = tf.get_collection('losses')
         total_loss = tf.add_n(losses, name='total_loss')
         saver = tf.train.Saver()
@@ -102,7 +108,8 @@ def evaluate(num_votes):
     ops = {'pointclouds_pl': pointclouds_pl,
            'labels_pl': labels_pl,
            'is_training_pl': is_training_pl,
-           'pred': pred}
+           'pred': pred,
+           'cos_loss_weight': cos_loss_weight}
 
     eval_one_epoch(sess, ops, num_votes)
 
@@ -123,7 +130,6 @@ def eval_one_epoch(sess, ops, num_votes=1, topk=1):
         scene_id = fl.read().splitlines()
 
     num_batches = len(TEST_DATASET_WHOLE_SCENE)
-    print(num_batches)
 
 
     total_seen_class = [0 for _ in range(NUM_CLASSES)]
@@ -132,6 +138,8 @@ def eval_one_epoch(sess, ops, num_votes=1, topk=1):
 
     log_string(str(datetime.now()))
     log_string('---- GENERATING TEST RESULTS ----')
+
+    log_string('vote num: '+str(num_votes))
 
     for batch_idx in range(num_batches):
         print("test %d %s ..."%(batch_idx, scene_id[batch_idx]))
@@ -162,14 +170,13 @@ def eval_one_epoch(sess, ops, num_votes=1, topk=1):
 
                 feed_dict = {ops['pointclouds_pl']: batch_data,
                         ops['labels_pl']: batch_label,
-                        ops['is_training_pl']: is_training}
+                        ops['is_training_pl']: is_training,
+                        ops['cos_loss_weight']: 1.0}
                 pred_val = sess.run(ops['pred'], feed_dict=feed_dict)#BxNxNUM_CLASSES
                 batch_pred_label = np.argmax(pred_val[:, :, 1:], 2) + 1#BxN
                 vote_label_pool = add_vote(vote_label_pool, batch_point_index[0:real_batch_size,...], batch_pred_label[0:real_batch_size,...])
 
         pred_label = np.argmax(vote_label_pool, 1)
-        print(pred_label)
-
         for l in range(NUM_CLASSES):
             total_seen_class[l] += np.sum((whole_scene_label==l))
             total_correct_class[l] += np.sum((pred_label==l) & (whole_scene_label==l))
