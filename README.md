@@ -50,7 +50,7 @@ Modify the model_path to your .ckpt file path and the ply_path to the original [
 
 ### ShapeNet DataSet Segmentation
 
-Please download the ShapeNet Part dataset following the instruction of [SpiderCNN](https://github.com/xyf513/SpiderCNN) and put it under the data directory. Unzip it under the corresponding directory:
+Please download the ShapeNet Part dataset from [here](https://shapenet.cs.stanford.edu/media/shapenetcore_partanno_segmentation_benchmark_v0_normal.zip) and put it under the data directory. Unzip it under the corresponding directory:
 ```
 unzip shapenetcore_partanno_segmentation_benchmark_v0_normal.zip
 ```
