@@ -89,5 +89,9 @@ CUDA_VISIBLE_DEVICES=0 python visualize_part.py --model_path log_shapenet_%s
 ```
 Under testing :=)
 
+## Acknowledgement
+Thanks:
+[Cardinal2376](https://github.com/Cardinal2376) for advices on requirements.txt and instructions of installation
+
 ## License
 This repository is released under MIT License (see LICENSE file for details).
